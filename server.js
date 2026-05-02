@@ -10,52 +10,41 @@ const url = require('url');
 
 const PORT = process.env.PORT || 3000;
 let TIKTOK_USERNAME = process.env.TIKTOK_USERNAME || '';
-// Accept any heart emoji as trigger
-function startsWithHeart(text) {
-  if (!text) return false;
-  // All common heart emojis + classic heart
-  var hearts = ['\u2665','\u2764','\uD83D\uDC9A','\uD83D\uDC99','\uD83D\uDC9C','\uD83D\uDC97','\uD83D\uDC93','\uD83D\uDC9E','\uD83D\uDC9B','\uD83E\uDDE1','\uD83E\uDD0D','\uD83E\uDD0E','\uD83D\uDC96','\uD83D\uDC98','\uD83D\uDC9D','\uD83D\uDC9F','\u2665\uFE0F'];
-  var t = text.trim();
-  for (var i=0; i<hearts.length; i++) {
-    if (t.startsWith(hearts[i])) return true;
+// Accept heart emoji anywhere in the message (start, end, or both)
+var HEART_CODES = [0x2665,0x2764,0x1F499,0x1F49A,0x1F49B,0x1F49C,0x1F49D,0x1F49E,0x1F49F,0x1F90D,0x1F90E,0x1F9E1];
+
+function containsHeart(text){
+  if(!text) return false;
+  // Check for classic heart char
+  if(text.indexOf('♥')!==-1||text.indexOf('❤')!==-1) return true;
+  // Check unicode heart emojis
+  for(var i=0;i<text.length;i++){
+    var code=text.codePointAt(i);
+    if(HEART_CODES.indexOf(code)!==-1) return true;
   }
-  // Also check if first char is in heart unicode range
-  var code = t.codePointAt(0);
-  if (code === 0x2665 || code === 0x2764 || code === 0x1F499 || 
-      code === 0x1F49A || code === 0x1F49B || code === 0x1F49C || 
-      code === 0x1F49D || code === 0x1F49E || code === 0x1F49F ||
-      code === 0x1F90D || code === 0x1F90E || code === 0x1F9E1) return true;
   return false;
 }
 
-// --- HTTP + WebSocket server ---
-const httpServer = http.createServer(handleRequest);
-const wss = new WebSocketServer({ server: httpServer });
-const clients = new Set();
-
-wss.on('connection', function(ws) {
-  clients.add(ws);
-  console.log('[WS] Client connected. Total: ' + clients.size);
-  ws.send(JSON.stringify({ type: 'connected', username: TIKTOK_USERNAME }));
-  ws.on('close', function() { clients.delete(ws); });
-  ws.on('error', function() { clients.delete(ws); });
-});
-
-function broadcast(data) {
-  const msg = JSON.stringify(data);
-  clients.forEach(function(ws) {
-    if (ws.readyState === 1) ws.send(msg);
-  });
-}
-
-// --- TikTok connection ---
-let connection = null;
-let reconnectTimer = null;
-
-function getGiftTier(diamonds) {
-  if (diamonds >= 50) return 'galaxy';
-  if (diamonds >= 5) return 'star';
-  return 'rose';
+function stripHearts(text){
+  if(!text) return text;
+  // Remove heart emojis from start and end, keep the message
+  var t=text.trim();
+  // Strip leading hearts
+  while(t.length>0&&containsHeart(t.charAt(0)+t.charAt(1))){
+    var code=t.codePointAt(0);
+    t=t.slice(code>0xFFFF?2:1).trim();
+  }
+  // Strip trailing hearts
+  while(t.length>0){
+    var last=t[t.length-1];
+    var secondLast=t.length>1?t[t.length-2]:'';
+    if(containsHeart(secondLast+last)||containsHeart(last)){
+      // check if last char is part of a surrogate pair
+      var lastCode=t.codePointAt(t.length-2<0?0:t.length-2);
+      t=t.slice(0,lastCode>0xFFFF?t.length-2:t.length-1).trim();
+    } else break;
+  }
+  return t.trim();
 }
 
 function connectTikTok(username) {
@@ -81,12 +70,9 @@ function connectTikTok(username) {
   // ♥ chat messages
   connection.on(WebcastEvent.CHAT, function(data) {
     var comment = (data.comment || '').trim();
-    if (!startsWithHeart(comment)) return;
-    // Remove the heart emoji (could be 1 or 2 chars for emoji)
-    var message = comment.trim();
-    var firstCode = message.codePointAt(0);
-    var charLen = firstCode > 0xFFFF ? 2 : 1;
-    message = message.slice(charLen).trim();
+    if (!containsHeart(comment)) return;
+    var message = stripHearts(comment);
+    if(!message||message.length<2) return;
     if (!message || message.length < 2) return;
     var user = (data.user && data.user.uniqueId) ? data.user.uniqueId : 'viewer';
     var display = (data.user && data.user.nickname) ? data.user.nickname : user;
