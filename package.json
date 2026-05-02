@@ -1,1 +1,18 @@
 
+{
+  "name": "unsent-words-bridge",
+  "version": "1.0.0",
+  "description": "TikTok chat bridge for UnsentWords live overlay",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "tiktok-live-connector": "2.0.9",
+    "ws": "^8.16.0"
+  }
+}
