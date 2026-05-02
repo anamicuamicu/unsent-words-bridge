@@ -136,6 +136,13 @@ function handleRequest(req, res) {
     return;
   }
 
+  if (parsed.pathname === '/test') {
+    handleTestMessage();
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end('<html><body style="background:#03010c;color:#f6eeff;font-family:sans-serif;padding:40px"><h2>Test message sent to overlay</h2><a href="/" style="color:rgba(218,108,130,0.8)">Back to admin</a></body></html>');
+    return;
+  }
+
   if (parsed.pathname === '/' || parsed.pathname === '/admin') {
     res.writeHead(200, { 'Content-Type': 'text/html' });
     res.end(adminPage());
@@ -209,6 +216,18 @@ function adminPage() {
     + 'else{td.className="dot red";ts.textContent="not connected";}'
     + '});'
     + '</script></body></html>';
+}
+
+// Test endpoint - push a test message to overlay
+// Visit /test in browser to fire a test message
+function handleTestMessage() {
+  broadcast({
+    type: 'message',
+    user: 'test',
+    displayName: 'test',
+    text: 'I never told you how much you meant to me.',
+    timestamp: Date.now()
+  });
 }
 
 // Start
