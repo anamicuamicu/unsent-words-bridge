@@ -1,4 +1,3 @@
-
 /**
  * UnsentWords — TikTok Chat Bridge
  * Uses tiktok-live-connector v2.x API
@@ -11,7 +10,23 @@ const url = require('url');
 
 const PORT = process.env.PORT || 3000;
 let TIKTOK_USERNAME = process.env.TIKTOK_USERNAME || '';
-const TRIGGER = '\u2665'; // ♥
+// Accept any heart emoji as trigger
+function startsWithHeart(text) {
+  if (!text) return false;
+  // All common heart emojis + classic heart
+  var hearts = ['\u2665','\u2764','\uD83D\uDC9A','\uD83D\uDC99','\uD83D\uDC9C','\uD83D\uDC97','\uD83D\uDC93','\uD83D\uDC9E','\uD83D\uDC9B','\uD83E\uDDE1','\uD83E\uDD0D','\uD83E\uDD0E','\uD83D\uDC96','\uD83D\uDC98','\uD83D\uDC9D','\uD83D\uDC9F','\u2665\uFE0F'];
+  var t = text.trim();
+  for (var i=0; i<hearts.length; i++) {
+    if (t.startsWith(hearts[i])) return true;
+  }
+  // Also check if first char is in heart unicode range
+  var code = t.codePointAt(0);
+  if (code === 0x2665 || code === 0x2764 || code === 0x1F499 || 
+      code === 0x1F49A || code === 0x1F49B || code === 0x1F49C || 
+      code === 0x1F49D || code === 0x1F49E || code === 0x1F49F ||
+      code === 0x1F90D || code === 0x1F90E || code === 0x1F9E1) return true;
+  return false;
+}
 
 // --- HTTP + WebSocket server ---
 const httpServer = http.createServer(handleRequest);
@@ -66,8 +81,12 @@ function connectTikTok(username) {
   // ♥ chat messages
   connection.on(WebcastEvent.CHAT, function(data) {
     var comment = (data.comment || '').trim();
-    if (!comment.startsWith(TRIGGER)) return;
-    var message = comment.slice(1).trim();
+    if (!startsWithHeart(comment)) return;
+    // Remove the heart emoji (could be 1 or 2 chars for emoji)
+    var message = comment.trim();
+    var firstCode = message.codePointAt(0);
+    var charLen = firstCode > 0xFFFF ? 2 : 1;
+    message = message.slice(charLen).trim();
     if (!message || message.length < 2) return;
     var user = (data.user && data.user.uniqueId) ? data.user.uniqueId : 'viewer';
     var display = (data.user && data.user.nickname) ? data.user.nickname : user;
