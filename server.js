@@ -67,20 +67,17 @@ function connectTikTok(username) {
     reconnectTimer = setTimeout(function() { connectTikTok(username); }, 30000);
   });
 
-  // ♥ chat messages
-  connection.on(WebcastEvent.CHAT, function(data) {
+  // Chat messages — no filter
+  connection.on(WebcastEvent.CHAT, function(data){
     var comment = (data.comment || '').trim();
-    if (!containsHeart(comment)) return;
-    var message = stripHearts(comment);
-    if(!message||message.length<2) return;
-    if (!message || message.length < 2) return;
+    if(!comment) return;
     var user = (data.user && data.user.uniqueId) ? data.user.uniqueId : 'viewer';
     var display = (data.user && data.user.nickname) ? data.user.nickname : user;
-    console.log('[Chat] @' + user + ': ' + message);
-    broadcast({ type: 'message', user: user, displayName: display, text: message, timestamp: Date.now() });
+    console.log('[Chat] @' + user + ': ' + comment);
+    broadcast({ type: 'message', user: user, displayName: display, text: comment, timestamp: Date.now() });
   });
 
-  // Gift events
+// Gift events
   connection.on(WebcastEvent.GIFT, function(data) {
     if (data.giftType === 1 && !data.repeatEnd) return;
     var user = (data.user && data.user.uniqueId) ? data.user.uniqueId : 'viewer';
