@@ -126,6 +126,55 @@ function handleRequest(req, res) {
     return;
   }
 
+  if (parsed.pathname === '/reply') {
+    var body = '';
+    req.on('data', function(chunk){ body += chunk; });
+    req.on('end', function(){
+      try {
+        var data = JSON.parse(body);
+        var msg = data.message || '';
+        callClaude(SYS_PROMPT, msg, 80, function(err, result) {
+          var reply = '';
+          if (!err && result && result.content && result.content[0]) {
+            reply = result.content[0].text.trim().replace(/^["']|["']$/g, '');
+          }
+          res.writeHead(200, {'Content-Type':'application/json','Access-Control-Allow-Origin':'*'});
+          res.end(JSON.stringify({reply: reply}));
+        });
+      } catch(e) {
+        res.writeHead(400); res.end(JSON.stringify({reply:''}));
+      }
+    });
+    return;
+  }
+
+  if (parsed.pathname === '/fixtypos') {
+    var body2 = '';
+    req.on('data', function(chunk){ body2 += chunk; });
+    req.on('end', function(){
+      try {
+        var data2 = JSON.parse(body2);
+        var text = data2.text || '';
+        callClaude('Fix spelling mistakes and typos only. Keep the exact meaning and words. Return only the corrected text, no explanation.', text, 60, function(err, result) {
+          var fixed = text;
+          if (!err && result && result.content && result.content[0]) {
+            fixed = result.content[0].text.trim();
+          }
+          res.writeHead(200, {'Content-Type':'application/json','Access-Control-Allow-Origin':'*'});
+          res.end(JSON.stringify({result: fixed}));
+        });
+      } catch(e) {
+        res.writeHead(400); res.end(JSON.stringify({result:''}));
+      }
+    });
+    return;
+  }
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(200, {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'POST,GET','Access-Control-Allow-Headers':'Content-Type'});
+    res.end(); return;
+  }
+
   if (parsed.pathname === '/' || parsed.pathname === '/admin') {
     res.writeHead(200, { 'Content-Type': 'text/html' });
     res.end(adminPage());
@@ -211,6 +260,42 @@ function handleTestMessage() {
     text: 'I never told you how much you meant to me.',
     timestamp: Date.now()
   });
+}
+
+// AI proxy endpoints
+var ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
+var SYS_PROMPT = "You are a calm, wise, deeply caring presence answering questions people are afraid to ask out loud. Someone is asking something they have carried for a long time. Rules: Always directly answer the question being asked. Your answer must clearly relate to the intent of the question. Keep answers to 1 to 2 sentences max. Tone: calm, wise, slightly poetic but still clear and understandable. Speak as if you are reassuring or gently guiding the person. Make the answer feel powerful and quotable. Examples: Q: Am I enough? A: You have always been enough, even in the moments when you doubted it most. Q: Will I succeed? A: Yes, if you keep going, your effort will shape the outcome you are hoping for. Q: Why do I feel lost? A: You are in a transition not a failure, this feeling is part of finding your direction. Q: where are you now? A: I am closer than you think, in the quiet moments when you feel something you cannot name. Q: do you miss me? A: Every single day, more than words have ever been able to hold. Return only the reply. No quotes, no labels, no extra text.";
+
+function callClaude(system, userMsg, maxTokens, callback) {
+  var https = require('https');
+  var body = JSON.stringify({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: maxTokens,
+    system: system,
+    messages: [{role: 'user', content: userMsg}]
+  });
+  var options = {
+    hostname: 'api.anthropic.com',
+    path: '/v1/messages',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_KEY,
+      'anthropic-version': '2023-06-01',
+      'Content-Length': Buffer.byteLength(body)
+    }
+  };
+  var req = https.request(options, function(res) {
+    var data = '';
+    res.on('data', function(chunk){ data += chunk; });
+    res.on('end', function(){
+      try { callback(null, JSON.parse(data)); }
+      catch(e){ callback(e); }
+    });
+  });
+  req.on('error', callback);
+  req.write(body);
+  req.end();
 }
 
 // Start
